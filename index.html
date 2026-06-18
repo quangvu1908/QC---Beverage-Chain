@@ -1258,7 +1258,7 @@ function showAuthScreen(id) {
 
 async function initAuth() {
   showAuthScreen('authLoading');
-  const saved = sessionStorage.getItem('qc_idtoken');
+  const saved = localStorage.getItem('qc_idtoken');
   if (saved) {
     try {
       const payload = decodeJwt(saved);
@@ -1267,7 +1267,7 @@ async function initAuth() {
         return;
       }
     } catch (e) { /* token hỏng — đăng nhập lại */ }
-    sessionStorage.removeItem('qc_idtoken');
+    localStorage.removeItem('qc_idtoken');
   }
   showAuthScreen('authLogin');
   setupGoogleSignIn();
@@ -1302,14 +1302,14 @@ async function checkAuthWithToken(idToken) {
     if (res.status !== 'ok') throw new Error(res.message || 'Lỗi xác thực');
     const u = res.user;
     if (!u.role) {
-      sessionStorage.setItem('qc_idtoken', idToken);
+      localStorage.setItem('qc_idtoken', idToken);
       document.getElementById('deniedEmail').textContent = u.email;
       document.getElementById('deniedPic').src = u.picture || '';
       showAuthScreen('authDenied');
       return;
     }
     currentUser = Object.assign({}, u, { idToken });
-    sessionStorage.setItem('qc_idtoken', idToken);
+    localStorage.setItem('qc_idtoken', idToken);
     applyRoleUI();
     showAuthScreen(null);
     startApp();
@@ -1317,7 +1317,7 @@ async function checkAuthWithToken(idToken) {
       setTimeout(() => alert('🎉 Bạn là người đăng nhập đầu tiên và đã được tự động cấp quyền Quản trị viên!\nVào "Quản Lý Tài Khoản" để cấp quyền cho các tài khoản khác.'), 400);
     }
   } catch (e) {
-    sessionStorage.removeItem('qc_idtoken');
+    localStorage.removeItem('qc_idtoken');
     showAuthScreen('authLogin');
     errEl.style.display = 'block';
     errEl.textContent = '❌ ' + e.message;
@@ -1326,7 +1326,7 @@ async function checkAuthWithToken(idToken) {
 }
 
 function authLogout() {
-  sessionStorage.removeItem('qc_idtoken');
+  localStorage.removeItem('qc_idtoken');
   currentUser = null;
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   showAuthScreen('authLogin');
