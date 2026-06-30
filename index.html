@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -492,6 +493,64 @@
   .zone-breadcrumb-text { font-size: 0.9rem; font-weight: 700; color: #444; }
   .zone-breadcrumb-icon { font-size: 1.1rem; }
 
+  /* ===== DASHBOARD ===== */
+  .dash-view-toggle { display: flex; gap: 4px; background: #f0f0f0; border-radius: 8px; padding: 3px; }
+  .dash-view-btn {
+    border: none; background: transparent; border-radius: 6px; padding: 5px 14px;
+    font-size: 0.82rem; font-weight: 700; cursor: pointer; color: #666; transition: all 0.15s;
+  }
+  .dash-view-btn.active { background: white; color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+
+  .dash-filter-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: white; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  }
+  .dash-filter-bar label { font-size: 0.78rem; font-weight: 700; color: #888; white-space: nowrap; }
+  .dash-filter-bar select, .dash-filter-bar input[type=date] {
+    border: 1.5px solid #e8e8e8; border-radius: 7px; padding: 5px 10px;
+    font-size: 0.82rem; color: #333; background: #fafafa; cursor: pointer;
+  }
+  .dash-filter-bar select:focus, .dash-filter-bar input[type=date]:focus { outline: none; border-color: var(--primary); }
+  .dash-filter-sep { color: #ccc; font-size: 0.9rem; }
+  .dash-filter-actions { display: flex; gap: 6px; margin-left: auto; }
+
+  .dash-kpi-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;
+  }
+  @media (max-width: 900px) { .dash-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .dash-kpi-grid { grid-template-columns: 1fr 1fr; } }
+
+  .dash-kpi-card {
+    background: white; border-radius: 12px; padding: 16px 18px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07); position: relative; overflow: hidden;
+  }
+  .dash-kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--kpi-color, var(--primary));
+  }
+  .dash-kpi-icon { font-size: 1.4rem; margin-bottom: 6px; }
+  .dash-kpi-value { font-size: 1.6rem; font-weight: 900; color: #222; line-height: 1.1; margin-bottom: 4px; }
+  .dash-kpi-label { font-size: 0.72rem; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.04em; }
+  .dash-kpi-sub { font-size: 0.8rem; color: #666; margin-top: 2px; line-height: 1.4; }
+
+  .dash-charts-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;
+  }
+  @media (max-width: 768px) { .dash-charts-grid { grid-template-columns: 1fr; } }
+
+  .dash-chart-card {
+    background: white; border-radius: 12px; padding: 16px 18px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  }
+  .dash-chart-card h3 { font-size: 0.85rem; font-weight: 700; color: #444; margin-bottom: 14px; }
+  .dash-chart-card canvas { max-height: 220px; }
+  .dash-empty {
+    text-align: center; padding: 48px 20px; color: #aaa; font-size: 0.95rem;
+    background: white; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  }
+  .dash-empty .icon { font-size: 2.5rem; margin-bottom: 10px; }
+
   @media print {
     body { background: white; }
     .page-header { background: #333 !important; -webkit-print-color-adjust: exact; }
@@ -667,8 +726,12 @@
         <strong style="font-size:1.05rem;">📊 Kết Quả Kiểm Tra</strong>
         <span class="results-count" id="resultsCount"></span>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm" onclick="syncFromSheet()" id="btnSync">🔄 Đồng bộ từ Sheet</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div class="dash-view-toggle">
+          <button class="dash-view-btn active" id="btnViewDash" onclick="switchDashView('dashboard')">📊 Dashboard</button>
+          <button class="dash-view-btn" id="btnViewList" onclick="switchDashView('list')">📋 Danh sách</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="syncFromSheet()" id="btnSync">🔄 Đồng bộ</button>
         <button class="btn btn-secondary btn-sm" onclick="exportAllPDF()" id="btnExportPDF">📄 Xuất PDF</button>
         <button class="btn btn-danger btn-sm" id="btnClearAll" onclick="clearAllResults()">🗑 Xóa tất cả</button>
       </div>
@@ -679,14 +742,83 @@
       <p>Đang tải kết quả từ Google Sheet...</p>
     </div>
 
-    <div id="resultsEmpty" class="results-empty" style="display:none;">
-      <div class="icon">📭</div>
-      <p>Chưa có kết quả nào được lưu.<br>Hãy chấm điểm và nhấn <b>Lưu kết quả</b> để thêm.</p>
+    <!-- ===== DASHBOARD VIEW ===== -->
+    <div id="dashboardView">
+      <!-- Filter bar -->
+      <div class="dash-filter-bar">
+        <label>Cửa hàng</label>
+        <select id="dashFilterStore">
+          <option value="">Tất cả cửa hàng</option>
+        </select>
+        <label>Từ</label>
+        <input type="date" id="dashFilterFrom">
+        <span class="dash-filter-sep">→</span>
+        <input type="date" id="dashFilterTo">
+        <div class="dash-filter-actions">
+          <button class="btn btn-primary btn-sm" onclick="applyDashFilter()">Lọc</button>
+          <button class="btn btn-secondary btn-sm" onclick="resetDashFilter()">Đặt lại</button>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="dash-kpi-grid">
+        <div class="dash-kpi-card" style="--kpi-color:#ee7b3c">
+          <div class="dash-kpi-icon">📈</div>
+          <div class="dash-kpi-value" id="kpiAvg">—</div>
+          <div class="dash-kpi-label">Điểm trung bình</div>
+        </div>
+        <div class="dash-kpi-card" style="--kpi-color:#1976d2">
+          <div class="dash-kpi-icon">📋</div>
+          <div class="dash-kpi-value" id="kpiTotal">0</div>
+          <div class="dash-kpi-label">Tổng số lần chấm</div>
+        </div>
+        <div class="dash-kpi-card" style="--kpi-color:#43a047">
+          <div class="dash-kpi-icon">✅</div>
+          <div class="dash-kpi-value" id="kpiPass">—</div>
+          <div class="dash-kpi-label">Đạt / Không đạt</div>
+        </div>
+        <div class="dash-kpi-card" style="--kpi-color:#8e24aa">
+          <div class="dash-kpi-icon">🏆</div>
+          <div class="dash-kpi-value" style="font-size:1rem;" id="kpiBest">—</div>
+          <div class="dash-kpi-label">Cao nhất / Thấp nhất</div>
+        </div>
+      </div>
+
+      <!-- Charts 2x2 -->
+      <div class="dash-charts-grid">
+        <div class="dash-chart-card">
+          <h3>📈 Xu hướng điểm theo thời gian</h3>
+          <canvas id="chartTrend"></canvas>
+        </div>
+        <div class="dash-chart-card">
+          <h3>🏪 Điểm trung bình theo cửa hàng</h3>
+          <canvas id="chartStore"></canvas>
+        </div>
+        <div class="dash-chart-card">
+          <h3>✅ Tỷ lệ đạt / không đạt</h3>
+          <canvas id="chartPassFail"></canvas>
+        </div>
+        <div class="dash-chart-card">
+          <h3>❌ Top tiêu chí không đạt nhiều nhất</h3>
+          <canvas id="chartTopFails"></canvas>
+        </div>
+      </div>
+
+      <div id="dashEmpty" class="dash-empty" style="display:none;">
+        <div class="icon">📭</div>
+        <p>Chưa có kết quả nào. Hãy chấm điểm và nhấn <b>Lưu kết quả</b>.</p>
+      </div>
     </div>
 
-    <div class="results-grid" id="resultsGrid"></div>
-
-    <div class="detail-panel" id="detailPanel" style="display:none;"></div>
+    <!-- ===== LIST VIEW ===== -->
+    <div id="listView" style="display:none;">
+      <div id="resultsEmpty" class="results-empty" style="display:none;">
+        <div class="icon">📭</div>
+        <p>Chưa có kết quả nào được lưu.<br>Hãy chấm điểm và nhấn <b>Lưu kết quả</b> để thêm.</p>
+      </div>
+      <div class="results-grid" id="resultsGrid"></div>
+      <div class="detail-panel" id="detailPanel" style="display:none;"></div>
+    </div>
   </div>
 </div>
 
@@ -1504,6 +1636,218 @@ async function deleteUserAccount(email) {
   }
 }
 
+// ========== DASHBOARD ==========
+let dashView = 'dashboard';
+let dashFilterStore = '';
+let dashFilterFrom = '';
+let dashFilterTo = '';
+const chartInstances = {};
+
+function switchDashView(view) {
+  dashView = view;
+  document.getElementById('dashboardView').style.display = view === 'dashboard' ? '' : 'none';
+  document.getElementById('listView').style.display = view === 'list' ? '' : 'none';
+  document.getElementById('btnViewDash').classList.toggle('active', view === 'dashboard');
+  document.getElementById('btnViewList').classList.toggle('active', view === 'list');
+  if (view === 'dashboard') renderDashboard();
+  else renderResultsList();
+}
+
+function getFilteredResults() {
+  return savedResults.filter(r => {
+    if (dashFilterStore && r.storeName !== dashFilterStore) return false;
+    if (dashFilterFrom && r.inspDate && r.inspDate < dashFilterFrom) return false;
+    if (dashFilterTo && r.inspDate && r.inspDate > dashFilterTo) return false;
+    return true;
+  });
+}
+
+function applyDashFilter() {
+  dashFilterStore = document.getElementById('dashFilterStore').value;
+  dashFilterFrom = document.getElementById('dashFilterFrom').value;
+  dashFilterTo = document.getElementById('dashFilterTo').value;
+  renderDashboard();
+}
+
+function resetDashFilter() {
+  dashFilterStore = '';
+  dashFilterFrom = '';
+  dashFilterTo = '';
+  document.getElementById('dashFilterStore').value = '';
+  document.getElementById('dashFilterFrom').value = '';
+  document.getElementById('dashFilterTo').value = '';
+  renderDashboard();
+}
+
+function updateStoreFilterOptions() {
+  const sel = document.getElementById('dashFilterStore');
+  if (!sel) return;
+  const current = sel.value;
+  const stores = [...new Set(savedResults.map(r => r.storeName))].filter(Boolean).sort();
+  sel.innerHTML = '<option value="">Tất cả cửa hàng</option>' +
+    stores.map(s => `<option value="${s}"${s === current ? ' selected' : ''}>${s}</option>`).join('');
+}
+
+function renderDashboard() {
+  const results = getFilteredResults();
+  updateStoreFilterOptions();
+  const isEmpty = results.length === 0;
+  const kpiGrid = document.querySelector('.dash-kpi-grid');
+  const chartsGrid = document.querySelector('.dash-charts-grid');
+  const dashEmpty = document.getElementById('dashEmpty');
+  if (kpiGrid) kpiGrid.style.display = isEmpty ? 'none' : '';
+  if (chartsGrid) chartsGrid.style.display = isEmpty ? 'none' : '';
+  if (dashEmpty) dashEmpty.style.display = isEmpty ? 'block' : 'none';
+  if (isEmpty) { destroyAllCharts(); return; }
+  renderKPIs(results);
+  renderChartTrend(results);
+  renderChartStore(results);
+  renderChartPassFail(results);
+  renderChartTopFails(results);
+}
+
+function renderKPIs(results) {
+  const avg = Math.round(results.reduce((s, r) => s + (r.pct || 0), 0) / results.length);
+  const passed = results.filter(r => (r.pct || 0) >= 80 && !r.mandatoryFails).length;
+  const failed = results.length - passed;
+  const best = results.reduce((a, b) => (a.pct || 0) >= (b.pct || 0) ? a : b);
+  const worst = results.reduce((a, b) => (a.pct || 0) <= (b.pct || 0) ? a : b);
+
+  const kpiAvg = document.getElementById('kpiAvg');
+  const kpiTotal = document.getElementById('kpiTotal');
+  const kpiPass = document.getElementById('kpiPass');
+  const kpiBest = document.getElementById('kpiBest');
+
+  if (kpiAvg) kpiAvg.textContent = avg + '%';
+  if (kpiTotal) kpiTotal.textContent = results.length;
+  if (kpiPass) kpiPass.innerHTML =
+    `<span style="color:#43a047">${passed} đạt</span> <span style="color:#aaa;font-size:0.85rem">/</span> <span style="color:#e53935">${failed} không đạt</span>`;
+  if (kpiBest) kpiBest.innerHTML =
+    `<span style="color:#43a047;font-size:0.78rem;display:block">⬆ ${best.storeName} (${best.pct}%)</span>` +
+    `<span style="color:#e53935;font-size:0.78rem;display:block">⬇ ${worst.storeName} (${worst.pct}%)</span>`;
+}
+
+function destroyChart(id) {
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+function destroyAllCharts() {
+  ['trend','store','passfail','topfails'].forEach(destroyChart);
+}
+
+const CHART_COLORS = ['#ee7b3c','#43a047','#1976d2','#e53935','#8e24aa','#f57f17','#00897b','#6d4c41'];
+
+function renderChartTrend(results) {
+  destroyChart('trend');
+  const ctx = document.getElementById('chartTrend');
+  if (!ctx) return;
+  const sorted = [...results].sort((a, b) => (a.inspDate || '') < (b.inspDate || '') ? -1 : 1);
+  const stores = [...new Set(sorted.map(r => r.storeName))];
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit'}) : '—';
+
+  if (stores.length <= 1) {
+    chartInstances['trend'] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: sorted.map(r => fmtDate(r.inspDate)),
+        datasets: [{ label: stores[0] || 'Điểm', data: sorted.map(r => r.pct || 0),
+          borderColor: '#ee7b3c', backgroundColor: 'rgba(238,123,60,0.08)',
+          tension: 0.3, fill: true, pointRadius: 4, pointHoverRadius: 6 }]
+      },
+      options: { responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw + '%' } } },
+        scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } } }
+    });
+  } else {
+    const allDates = [...new Set(sorted.map(r => r.inspDate))].sort();
+    chartInstances['trend'] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: allDates.map(fmtDate),
+        datasets: stores.map((store, i) => {
+          const sr = sorted.filter(r => r.storeName === store);
+          return { label: store.replace('Mongo ',''), spanGaps: true,
+            data: allDates.map(d => { const m = sr.find(r => r.inspDate === d); return m ? (m.pct || 0) : null; }),
+            borderColor: CHART_COLORS[i % CHART_COLORS.length], backgroundColor: 'transparent',
+            tension: 0.3, pointRadius: 3 };
+        })
+      },
+      options: { responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+          tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.raw + '%' } } },
+        scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } } }
+    });
+  }
+}
+
+function renderChartStore(results) {
+  destroyChart('store');
+  const ctx = document.getElementById('chartStore');
+  if (!ctx) return;
+  const map = {};
+  results.forEach(r => { if (!map[r.storeName]) map[r.storeName] = []; map[r.storeName].push(r.pct || 0); });
+  const stores = Object.keys(map).sort();
+  const avgs = stores.map(s => Math.round(map[s].reduce((a,b) => a+b,0) / map[s].length));
+  chartInstances['store'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: stores.map(s => s.replace('Mongo ','')),
+      datasets: [{ data: avgs, backgroundColor: avgs.map(v => v >= 80 ? '#43a047' : v >= 65 ? '#ffa726' : '#e53935'), borderRadius: 6 }]
+    },
+    options: { responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw + '%' } } },
+      scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } }, x: { ticks: { font: { size: 10 } } } } }
+  });
+}
+
+function renderChartPassFail(results) {
+  destroyChart('passfail');
+  const ctx = document.getElementById('chartPassFail');
+  if (!ctx) return;
+  const passed = results.filter(r => (r.pct || 0) >= 80 && !r.mandatoryFails).length;
+  const failed = results.length - passed;
+  const total = results.length;
+  chartInstances['passfail'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Đạt (≥80%)', 'Không đạt'],
+      datasets: [{ data: [passed, failed], backgroundColor: ['#43a047','#e53935'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: true, cutout: '62%',
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } },
+        tooltip: { callbacks: { label: c => c.label + ': ' + c.raw + ' (' + Math.round(c.raw/total*100) + '%)' } } } }
+  });
+}
+
+function renderChartTopFails(results) {
+  destroyChart('topfails');
+  const ctx = document.getElementById('chartTopFails');
+  if (!ctx) return;
+  const failCount = {};
+  results.forEach(r => {
+    Object.keys(r.state || {}).forEach(cid => {
+      if (r.state[cid].result === 'fail') failCount[cid] = (failCount[cid] || 0) + 1;
+    });
+  });
+  const top = Object.entries(failCount).sort((a,b) => b[1]-a[1]).slice(0,10);
+  if (top.length === 0) return;
+  const labels = top.map(([id]) => {
+    const title = CRIT_MAP[id]?.title || id;
+    return title.length > 35 ? title.slice(0,33) + '…' : title;
+  });
+  chartInstances['topfails'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data: top.map(([,c]) => c), backgroundColor: '#e53935', borderRadius: 4 }]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw + ' lần không đạt' } } },
+      scales: { x: { ticks: { stepSize: 1 } }, y: { ticks: { font: { size: 10 } } } } }
+  });
+  ctx.parentElement.style.height = Math.max(200, top.length * 32) + 'px';
+  ctx.style.maxHeight = 'none';
+}
+
 // ========== TAB SWITCHING ==========
 const TAB_HEADERS = {
   scoring: ['📝 Chấm Điểm', 'Tiêu chuẩn QC — 5 khu vực · 16 hạng mục · 48 tiêu chí · Phiên bản v2.0 (06/2026)'],
@@ -1944,31 +2288,44 @@ function updateBadge() {
 let selectedResultId = null;
 
 function renderResultsTab() {
-  const grid = document.getElementById('resultsGrid');
-  const empty = document.getElementById('resultsEmpty');
-  const count = document.getElementById('resultsCount');
-
   const clearBtn = document.getElementById('btnClearAll');
   if (clearBtn) clearBtn.style.display = isViewOnly() ? 'none' : '';
+  const count = document.getElementById('resultsCount');
+  if (count) count.textContent = savedResults.length > 0 ? ` — ${savedResults.length} lần kiểm tra` : '';
+
+  if (dashView === 'dashboard') {
+    document.getElementById('dashboardView').style.display = '';
+    document.getElementById('listView').style.display = 'none';
+    renderDashboard();
+  } else {
+    document.getElementById('dashboardView').style.display = 'none';
+    document.getElementById('listView').style.display = '';
+    renderResultsList();
+  }
+}
+
+function renderResultsList() {
+  const grid = document.getElementById('resultsGrid');
+  const empty = document.getElementById('resultsEmpty');
 
   if (savedResults.length === 0) {
-    empty.style.display = 'block';
-    grid.style.display = 'none';
-    document.getElementById('detailPanel').style.display = 'none';
-    count.textContent = '';
+    if (empty) empty.style.display = 'block';
+    if (grid) grid.style.display = 'none';
+    const dp = document.getElementById('detailPanel');
+    if (dp) dp.style.display = 'none';
     return;
   }
 
-  empty.style.display = 'none';
-  grid.style.display = 'grid';
-  count.textContent = ` — ${savedResults.length} lần kiểm tra`;
+  if (empty) empty.style.display = 'none';
+  if (grid) grid.style.display = 'grid';
 
   grid.innerHTML = savedResults.map(r => {
     let badgeClass, badgeText, barColor;
     if (r.mandatoryFails > 0)   { badgeClass='badge-fail'; badgeText='❌ Không đạt'; barColor='#e53935'; }
     else if (r.pct >= 90)       { badgeClass='badge-pass'; badgeText='✅ Xuất sắc';  barColor='#43a047'; }
-    else if (r.pct >= 75)       { badgeClass='badge-pass'; badgeText='✅ Đạt';       barColor='#43a047'; }
-    else                        { badgeClass='badge-warn'; badgeText='⚠ Cần cải thiện'; barColor='#ffa726'; }
+    else if (r.pct >= 80)       { badgeClass='badge-pass'; badgeText='✅ Đạt';       barColor='#43a047'; }
+    else if (r.pct >= 65)       { badgeClass='badge-warn'; badgeText='⚠ Cần cải thiện'; barColor='#ffa726'; }
+    else                        { badgeClass='badge-fail'; badgeText='❌ Không đạt'; barColor='#e53935'; }
 
     const dateStr = r.inspDate ? new Date(r.inspDate).toLocaleDateString('vi-VN') : '—';
     const isSelected = String(r.id) === String(selectedResultId);
